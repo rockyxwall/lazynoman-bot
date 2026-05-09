@@ -4,11 +4,11 @@
   "type": "module",
   "scripts": {
     "deploy": "wrangler deploy",
-    "dev": "wrangler dev"
+    "dev": "wrangler dev",
+    "register": "curl.exe -X PUT \"https://discord.com/api/v10/applications/1502729387261558915/commands\" -H \"Authorization: Bot %DISCORD_TOKEN%\" -H \"Content-Type: application/json\" -d \"@commands.json\""
   },
   "dependencies": {
-    "@libsql/client": "^0.14.0",
-    "discord-interactions": "^4.4.0"
+    "@libsql/client": "^0.14.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260509.1",
