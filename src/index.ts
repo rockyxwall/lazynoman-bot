@@ -49,7 +49,8 @@ export default {
 
       // Verify Discord Webhook Signature
       if (signature && timestamp) {
-        const isValidRequest = await verifyKey(
+        console.log('Validating signature...');
+        const isValidRequest = verifyKey(
           body,
           signature,
           timestamp,
@@ -57,8 +58,10 @@ export default {
         );
 
         if (!isValidRequest) {
+          console.error('Invalid signature');
           return new Response('Bad request signature', { status: 401 });
         }
+        console.log('Signature valid!');
 
         const interaction = JSON.parse(body);
 
