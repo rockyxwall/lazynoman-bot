@@ -3,13 +3,18 @@
   "version": "1.0.0",
   "main": "index.ts",
   "type": "module",
+  "scripts": {
+    "build": "echo 'Building...' && ls public"
+  },
   "dependencies": {
     "discord.js": "^14.17.3",
     "axios": "^1.7.9",
-    "dotenv": "^16.4.7"
+    "dotenv": "^16.4.7",
+    "@libsql/client": "^0.14.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.1",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "wrangler": "^3.107.2"
   }
 }
