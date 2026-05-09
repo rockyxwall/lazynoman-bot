@@ -55,6 +55,8 @@ async function verifyDiscordRequest(request: Request, env: Env) {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    console.log(`Incoming request: ${request.method} ${request.url}`);
+    
     // 1. Health Check
     if (request.method === 'GET') {
       return new Response('Worker is online!', { status: 200 });
