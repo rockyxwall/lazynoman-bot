@@ -1,30 +1,29 @@
 # LazyNoman Bot: AI Context
 
-**Role:** Discord interface for the LazyNoman tracker.
-**Stack:** Bun, TypeScript, Discord.js v14, Axios.
-**Hosting:** Railway or Fly.io (Persistent Process).
+**Role:** Serverless Discord interface for the LazyNoman tracker.
+**Stack:** Cloudflare Workers, TypeScript, `discord-interactions`, `libsql` (Turso).
+**Hosting:** Cloudflare Workers (Interaction Webhook).
 
 ## 🏗️ Architecture
-- **Relationship:** Strictly decoupled from the Astro repository.
-- **Communication:** `Bot` → `HTTP POST` → `Cloudflare Worker API` → `Turso/D1 Database`.
-- **Zero Local File Access:** Does NOT read MDX or local Astro files.
+- **Serverless:** No persistent bot process. Everything runs in the Cloudflare Worker.
+- **Communication:** `Discord Webhook` → `Cloudflare Worker` → `Turso (libsql HTTP)`.
+- **Zero Hosting Cost:** Runs entirely on Cloudflare's free/usage tier.
 
 ## 🛠️ Commands
-- `/add`: Sends title, category, and status to the Worker API.
-- `/ping`: Health check for bot connectivity.
+- `/add`: Directly handled by the Worker, inserts into Turso.
+- `/ping`: Health check handled by the Worker.
 
-## 🔐 Environment Variables (.env)
-- `DISCORD_TOKEN`: Bot token from Discord Developer Portal.
-- `DISCORD_CLIENT_ID`: Application ID.
-- `CF_WORKER_URL`: The endpoint of your Cloudflare Worker (e.g., `https://.../api/novel`).
-- `API_SECRET`: Shared bearer token to authorize the bot with the Worker.
+## 🔐 Environment Variables (Cloudflare Secrets)
+- `DISCORD_PUBLIC_KEY`: Used to verify webhook signatures.
+- `TURSO_DATABASE_URL`: Your Turso DB URL.
+- `TURSO_AUTH_TOKEN`: Your Turso Auth Token.
 
-## 🚀 Deployment (Fly.io)
-1. `fly secrets set DISCORD_TOKEN="..." API_SECRET="..."`
-2. `fly deploy`
+## 🚀 Setup & Deployment
+1. Set the **Interactions Endpoint URL** in the Discord Developer Portal to your Worker URL.
+2. Add secrets to Cloudflare: `npx wrangler secret put DISCORD_PUBLIC_KEY`, etc.
+3. Deploy: `npm run deploy`.
 
 ## 🤖 Development Rules
-- Use `SlashCommandBuilder` for all new commands.
-- Always `deferReply()` for API calls to prevent 3s timeouts.
-- Use `axios` for all external communication.
-- Keep `index.ts` lean; move logic to `/src` if it grows.
+- All logic stays in `src/index.ts`.
+- Use `verifyKey` for every incoming POST request.
+- Keep responses within Discord's 3-second limit.

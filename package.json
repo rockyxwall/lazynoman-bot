@@ -1,21 +1,17 @@
 {
   "name": "lazynoman-bot",
   "version": "1.0.0",
-  "main": "bot/index.ts",
   "type": "module",
   "scripts": {
-    "start": "bun run bot/index.ts",
-    "build": "echo 'Building...' && ls public"
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
   },
   "dependencies": {
-    "discord.js": "^14.17.3",
-    "axios": "^1.7.9",
-    "dotenv": "^16.4.7",
-    "@libsql/client": "^0.14.0"
+    "@libsql/client": "^0.14.0",
+    "discord-interactions": "^4.4.0"
   },
   "devDependencies": {
-    "@types/node": "^22.13.1",
-    "typescript": "^5.7.3",
+    "@cloudflare/workers-types": "^4.20260509.1",
     "wrangler": "^3.107.2"
   }
 }
