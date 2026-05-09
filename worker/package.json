@@ -1,0 +1,11 @@
+{
+  "name": "lazynoman-bot",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "devDependencies": {
+    "wrangler": "^3.107.2"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.14.0"
+  }
+}
