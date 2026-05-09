@@ -1,7 +1,7 @@
 {
   "name": "lazynoman-bot",
   "version": "1.0.0",
-  "main": "index.ts",
+  "main": "bot/index.ts",
   "type": "module",
   "scripts": {
     "build": "echo 'Building...' && ls public"
