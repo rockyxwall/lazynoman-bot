@@ -1,0 +1,19 @@
+# fly.toml file generated for lazynoman-bot
+
+app = "lazynoman" # CHANGE THIS to a unique name
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # Public env vars go here, secrets go in 'fly secrets set'
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+  # Discord bots don't technically need services/ports, 
+  # but Fly often requires a definition for health checks.
+
+[processes]
+  app = "bun run bot/index.ts"
