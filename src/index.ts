@@ -1,14 +1,45 @@
 import { createClient } from '@libsql/client/http';
-import {
-  InteractionType,
-  InteractionResponseType,
-  verifyKey,
-} from 'discord-interactions';
 
 export interface Env {
   TURSO_DATABASE_URL: string;
   TURSO_AUTH_TOKEN: string;
   DISCORD_PUBLIC_KEY: string;
+}
+
+// Utility to convert hex string to Uint8Array
+function hexToUint8Array(hex: string) {
+  return new Uint8Array(hex.match(/.{1,2}/g)!.map((val) => parseInt(val, 16)));
+}
+
+async function verifyDiscordRequest(request: Request, publicKey: string) {
+  const signature = request.headers.get('x-signature-ed25519');
+  const timestamp = request.headers.get('x-signature-timestamp');
+  const body = await request.clone().text();
+
+  if (!signature || !timestamp) return { isValid: false };
+
+  try {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      hexToUint8Array(publicKey),
+      { name: 'NODE-ED25519', namedCurve: 'NODE-ED25519' },
+      false,
+      ['verify']
+    );
+
+    const isValid = await crypto.subtle.verify(
+      'NODE-ED25519',
+      key,
+      hexToUint8Array(signature),
+      encoder.encode(timestamp + body)
+    );
+
+    return { isValid, body };
+  } catch (err) {
+    console.error('Verification error:', err);
+    return { isValid: false };
+  }
 }
 
 export default {
@@ -22,99 +53,76 @@ export default {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LazyNoman Bot API</title>
     <style>
-        :root {
-            --primary-color: #5865F2; --bg-color: #313338; --text-color: #ffffff; --container-bg: #2b2d31;
-        }
-        body { font-family: sans-serif; background-color: var(--bg-color); color: var(--text-color); display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .container { text-align: center; background-color: var(--container-bg); padding: 3rem; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); max-width: 400px; }
-        h1 { color: var(--primary-color); }
-        .status-badge { background-color: #23a55a; color: white; padding: 0.5rem 1rem; border-radius: 20px; font-weight: bold; }
+        body { font-family: sans-serif; background: #313338; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .container { text-align: center; background: #2b2d31; padding: 2rem; border-radius: 8px; border: 1px solid #5865f2; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>LazyNoman Bot</h1>
-        <p>This worker handles Discord Webhooks and manages the tracker database.</p>
-        <div class="status-badge">Worker is Active</div>
+        <p>Status: <span style="color: #23a55a;">Worker Online</span></p>
     </div>
 </body>
 </html>`, { headers: { 'Content-Type': 'text/html' } });
     }
 
-    // 2. POST Request -> Discord Webhook or API
+    // 2. POST Request -> Discord Webhook
     if (request.method === 'POST') {
-      const signature = request.headers.get('x-signature-ed25519');
-      const timestamp = request.headers.get('x-signature-timestamp');
-      const body = await request.text();
+      const { isValid, body } = await verifyDiscordRequest(request, env.DISCORD_PUBLIC_KEY);
 
-      // Verify Discord Webhook Signature
-      if (signature && timestamp) {
-        console.log('Validating signature...');
-        const isValidRequest = verifyKey(
-          body,
-          signature,
-          timestamp,
-          env.DISCORD_PUBLIC_KEY
-        );
+      if (!isValid || !body) {
+        return new Response('Invalid request signature', { status: 401 });
+      }
 
-        if (!isValidRequest) {
-          console.error('Invalid signature');
-          return new Response('Bad request signature', { status: 401 });
-        }
-        console.log('Signature valid!');
+      const interaction = JSON.parse(body);
 
-        const interaction = JSON.parse(body);
+      // Handle PING
+      if (interaction.type === 1) { // InteractionType.PING
+        return new Response(JSON.stringify({ type: 1 }), { // InteractionResponseType.PONG
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
 
-        // Handle PING (Discord check)
-        if (interaction.type === InteractionType.PING) {
-          return new Response(JSON.stringify({ type: InteractionResponseType.PONG }), {
-            headers: { 'Content-Type': 'application/json' },
-          });
+      // Handle Commands
+      if (interaction.type === 2) { // InteractionType.APPLICATION_COMMAND
+        const { name, options } = interaction.data;
+
+        if (name === 'ping') {
+          return new Response(JSON.stringify({
+            type: 4, // CHANNEL_MESSAGE_WITH_SOURCE
+            data: { content: '🏓 Pong! Webhook is working perfectly.' },
+          }), { headers: { 'Content-Type': 'application/json' } });
         }
 
-        // Handle Slash Commands
-        if (interaction.type === InteractionType.APPLICATION_COMMAND) {
-          const { name, options } = interaction.data;
+        if (name === 'add') {
+          const title = options.find((o: any) => o.name === 'title')?.value;
+          const category = options.find((o: any) => o.name === 'category')?.value;
+          const status = options.find((o: any) => o.name === 'status')?.value;
+          const author = interaction.member?.user?.username || 'unknown';
 
-          if (name === 'ping') {
+          try {
+            const client = createClient({
+              url: env.TURSO_DATABASE_URL,
+              authToken: env.TURSO_AUTH_TOKEN,
+            });
+
+            await client.execute({
+              sql: "INSERT INTO items (title, category, status, author) VALUES (?, ?, ?, ?)",
+              args: [title, category, status, author]
+            });
+
             return new Response(JSON.stringify({
-              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-              data: { content: '🏓 Pong! I am running on Cloudflare Workers.' },
+              type: 4,
+              data: { content: `✅ Added **${title}** to the tracker!` },
             }), { headers: { 'Content-Type': 'application/json' } });
-          }
-
-          if (name === 'add') {
-            const title = options.find((o: any) => o.name === 'title')?.value;
-            const category = options.find((o: any) => o.name === 'category')?.value;
-            const status = options.find((o: any) => o.name === 'status')?.value;
-            const author = interaction.member?.user?.username || 'unknown';
-
-            try {
-              const client = createClient({
-                url: env.TURSO_DATABASE_URL,
-                authToken: env.TURSO_AUTH_TOKEN,
-              });
-
-              await client.execute({
-                sql: "INSERT INTO items (title, category, status, author) VALUES (?, ?, ?, ?)",
-                args: [title, category, status, author]
-              });
-
-              return new Response(JSON.stringify({
-                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: { content: `✅ Added **${title}** to the tracker!` },
-              }), { headers: { 'Content-Type': 'application/json' } });
-            } catch (e: any) {
-              return new Response(JSON.stringify({
-                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-                data: { content: `❌ Database Error: ${e.message}` },
-              }), { headers: { 'Content-Type': 'application/json' } });
-            }
+          } catch (e: any) {
+            return new Response(JSON.stringify({
+              type: 4,
+              data: { content: `❌ DB Error: ${e.message}` },
+            }), { headers: { 'Content-Type': 'application/json' } });
           }
         }
       }
-
-      return new Response('Method Not Allowed', { status: 405 });
     }
 
     return new Response('Not Found', { status: 404 });
