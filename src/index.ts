@@ -95,6 +95,64 @@ export default {
             }), { headers: { 'Content-Type': 'application/json' } });
           }
 
+          const client = createClient({
+            url: env.TURSO_DATABASE_URL,
+            authToken: env.TURSO_AUTH_TOKEN,
+          });
+
+          if (name === 'list') {
+            try {
+              const result = await client.execute("SELECT rowid as id, title, category, status FROM items ORDER BY rowid DESC LIMIT 20");
+              if (result.rows.length === 0) {
+                return new Response(JSON.stringify({
+                  type: 4,
+                  data: { content: '📭 The tracker is empty.' },
+                }), { headers: { 'Content-Type': 'application/json' } });
+              }
+
+              const list = result.rows.map(row => `\`#${row.id}\` **${row.title}** (${row.category}) - *${row.status}*`).join('\n');
+              return new Response(JSON.stringify({
+                type: 4,
+                data: { content: `📊 **Recent Items:**\n${list}` },
+              }), { headers: { 'Content-Type': 'application/json' } });
+            } catch (e: any) {
+              return new Response(JSON.stringify({ type: 4, data: { content: `❌ Error: ${e.message}` } }), { headers: { 'Content-Type': 'application/json' } });
+            }
+          }
+
+          if (name === 'edit') {
+            const id = options.find((o: any) => o.name === 'id')?.value;
+            const title = options.find((o: any) => o.name === 'title')?.value;
+            const category = options.find((o: any) => o.name === 'category')?.value;
+            const status = options.find((o: any) => o.name === 'status')?.value;
+
+            try {
+              // Build dynamic update
+              const updates = [];
+              const args = [];
+              if (title) { updates.push("title = ?"); args.push(title); }
+              if (category) { updates.push("category = ?"); args.push(category); }
+              if (status) { updates.push("status = ?"); args.push(status); }
+              
+              if (updates.length === 0) {
+                return new Response(JSON.stringify({ type: 4, data: { content: '❓ Nothing to update!' } }), { headers: { 'Content-Type': 'application/json' } });
+              }
+
+              args.push(id);
+              await client.execute({
+                sql: `UPDATE items SET ${updates.join(', ')} WHERE rowid = ?`,
+                args
+              });
+
+              return new Response(JSON.stringify({
+                type: 4,
+                data: { content: `✅ Updated item \`#${id}\`!` },
+              }), { headers: { 'Content-Type': 'application/json' } });
+            } catch (e: any) {
+              return new Response(JSON.stringify({ type: 4, data: { content: `❌ Error: ${e.message}` } }), { headers: { 'Content-Type': 'application/json' } });
+            }
+          }
+
           if (name === 'add') {
             const title = options.find((o: any) => o.name === 'title')?.value;
             const category = options.find((o: any) => o.name === 'category')?.value;
