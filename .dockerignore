@@ -1,0 +1,11 @@
+node_modules
+.git
+.env
+.github
+worker
+README.md
+LICENSE
+GEMINI.md
+fly.toml
+Dockerfile
+.dockerignore
