@@ -6,23 +6,31 @@ export interface Env {
   DISCORD_PUBLIC_KEY: string;
 }
 
-// Utility to convert hex string to Uint8Array
+// Robust hex conversion
 function hexToUint8Array(hex: string) {
-  return new Uint8Array(hex.match(/.{1,2}/g)!.map((val) => parseInt(val, 16)));
+  if (!hex) return new Uint8Array(0);
+  const buf = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < buf.length; i++) {
+    buf[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return buf;
 }
 
-async function verifyDiscordRequest(request: Request, publicKey: string) {
+async function verifyDiscordRequest(request: Request, env: Env) {
   const signature = request.headers.get('x-signature-ed25519');
   const timestamp = request.headers.get('x-signature-timestamp');
   const body = await request.clone().text();
 
-  if (!signature || !timestamp) return { isValid: false };
+  if (!signature || !timestamp || !env.DISCORD_PUBLIC_KEY) {
+    console.error('Missing signature, timestamp, or public key');
+    return { isValid: false };
+  }
 
   try {
     const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
       'raw',
-      hexToUint8Array(publicKey),
+      hexToUint8Array(env.DISCORD_PUBLIC_KEY),
       { name: 'NODE-ED25519', namedCurve: 'NODE-ED25519' },
       false,
       ['verify']
@@ -37,38 +45,19 @@ async function verifyDiscordRequest(request: Request, publicKey: string) {
 
     return { isValid, body };
   } catch (err) {
-    console.error('Verification error:', err);
+    console.error('Crypto error:', err);
     return { isValid: false };
   }
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // 1. GET Request -> Landing Page
     if (request.method === 'GET') {
-      return new Response(`<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LazyNoman Bot API</title>
-    <style>
-        body { font-family: sans-serif; background: #313338; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .container { text-align: center; background: #2b2d31; padding: 2rem; border-radius: 8px; border: 1px solid #5865f2; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>LazyNoman Bot</h1>
-        <p>Status: <span style="color: #23a55a;">Worker Online</span></p>
-    </div>
-</body>
-</html>`, { headers: { 'Content-Type': 'text/html' } });
+      return new Response('Worker is online!', { status: 200 });
     }
 
-    // 2. POST Request -> Discord Webhook
     if (request.method === 'POST') {
-      const { isValid, body } = await verifyDiscordRequest(request, env.DISCORD_PUBLIC_KEY);
+      const { isValid, body } = await verifyDiscordRequest(request, env);
 
       if (!isValid || !body) {
         return new Response('Invalid request signature', { status: 401 });
@@ -76,21 +65,21 @@ export default {
 
       const interaction = JSON.parse(body);
 
-      // Handle PING
-      if (interaction.type === 1) { // InteractionType.PING
-        return new Response(JSON.stringify({ type: 1 }), { // InteractionResponseType.PONG
+      // 1. Handle PING (Critical for Discord verification)
+      if (interaction.type === 1) {
+        return new Response(JSON.stringify({ type: 1 }), {
           headers: { 'Content-Type': 'application/json' },
         });
       }
 
-      // Handle Commands
-      if (interaction.type === 2) { // InteractionType.APPLICATION_COMMAND
+      // 2. Handle Slash Commands
+      if (interaction.type === 2) {
         const { name, options } = interaction.data;
 
         if (name === 'ping') {
           return new Response(JSON.stringify({
-            type: 4, // CHANNEL_MESSAGE_WITH_SOURCE
-            data: { content: '🏓 Pong! Webhook is working perfectly.' },
+            type: 4,
+            data: { content: '🏓 Pong!' },
           }), { headers: { 'Content-Type': 'application/json' } });
         }
 
@@ -113,7 +102,7 @@ export default {
 
             return new Response(JSON.stringify({
               type: 4,
-              data: { content: `✅ Added **${title}** to the tracker!` },
+              data: { content: `✅ Added **${title}**!` },
             }), { headers: { 'Content-Type': 'application/json' } });
           } catch (e: any) {
             return new Response(JSON.stringify({
